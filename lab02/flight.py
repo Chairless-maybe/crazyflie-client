@@ -1,3 +1,4 @@
+
 ###################################
 # IMPORTS
 
@@ -26,7 +27,7 @@ logging.basicConfig(level=logging.ERROR)
 
 # Specify the uri of the drone to which you want to connect (if your radio
 # channel is X, the uri should be 'radio://0/X/2M/E7E7E7E7E7')
-uri = 'radio://0/78/2M/E7E7E7E7E7'
+uri = 'radio://0/78/2M/E7E7E7E7E7' # <-- FIXME
 
 # Specify the variables you want to log at 100 Hz from the drone
 variables = [
@@ -44,13 +45,13 @@ ip_address = '128.174.245.190'
 # Specify the name of the rigid body that corresponds to your active marker
 # deck in the motion capture system. If your marker deck number is X, this name
 # should be 'marker_deck_X'.
-marker_deck_name = 'marker_deck_8'
+marker_deck_name = 'marker_deck_30' # <-- FIXME
 
 # Specify the marker IDs that correspond to your active marker deck in the
 # motion capture system. If your marker deck number is X, these IDs should be
 # [X + 1, X + 2, X + 3, X + 4]. They are listed in clockwise order (viewed
 # top-down), starting from the front.
-marker_deck_ids = [91, 92, 93, 94]
+marker_deck_ids = [31, 32, 33, 34]
 
 
 ###################################
@@ -263,7 +264,7 @@ class QualisysClient(Thread):
 
 if __name__ == '__main__':
     # Specify whether or not to use the motion capture system
-    use_mocap = False
+    use_mocap = True
 
     # Initialize radio
     cflib.crtp.init_drivers()
@@ -285,16 +286,18 @@ if __name__ == '__main__':
         mocap_client = QualisysClient(ip_address, marker_deck_name)
 
     # Pause before takeoff
-    drone_client.stop(1.0)
+        drone_client.stop(5.0)
 
-    #
-    # FIXME: Insert move commands here to fly...
-    #
-    #   drone_client.move(0.0, 0.0, 0.3, 0.0, 1.0)
-    #
+    #     drone_client.move(0.0, 0.0, 0.5, 0.0, 3.0)  # take off and hover at a height of 0.5 meters
+    #     drone_client.move(0.2, 0.0, 0.5, 0.0, 3.0)  # move 0.2 meters forward
+    #     drone_client.move(0.2, 0.2, 0.5, 0.0, 3.0)  # move 0.2 meters left
+    #     drone_client.move(0.0, 0.2, 0.5, 0.0, 3.0)  # move 0.2 meters back
+    #     drone_client.move(0.0, 0.2, 0.5, 0.0, 3.0)  # move 0.2 meters back
+    #     drone_client.move(0.0, 0.0, 0.5, 0.0, 3.0)  # move 0.2 meters right
+    #     drone_client.move(0.0, 0.0, 0.1, 0.0, 1.0)  # prepare for landing from a height of 0.1 meters
     
-    # Pause after landing
-    drone_client.stop(1.0)
+    # # Pause after landing
+    # drone_client.stop(3.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -309,5 +312,7 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('y_data.json', 'w') as outfile:
-        json.dump(data, outfile, sort_keys=False)
+    # with open('hardware_data.json', 'w') as outfile:
+    #     json.dump(data, outfile, sort_keys=False)
+with open('silts.json', 'w') as outfile:
+    json.dump(data, outfile, sort_keys=False)
