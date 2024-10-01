@@ -303,30 +303,7 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    #
-    # FIXME: Insert move commands here to fly...
-    #
-    #   drone_client.move(0.0, 0.0, 0.3, 0.0, 1.0)
-    #
-    # Move up to 0.53 meters:
-    yaw_max = np.linspace(5, 50, 10)
-    yaw_min = np.linspace(-5, -50, 10)
-    z_max= np.linspace (0.52,0.7,10)
-    z_min= np.linspace (0.48,0.30,10)
-
-    for i in range(10):
-        drone_client.move(0.0, 0.0, z_max[i], 0., 2.0)
-        # Move down to 0.47 meters:
-        drone_client.move(0.0, 0.0, z_min[i], 0., 2.0)  
-        # drone_client.move(0.0, 0.0, 0.50, yaw_max[i], 2.0)
-        # # Move down to 0.47 meters:
-        # drone_client.move(0.0, 0.0, 0.50, yaw_min[i], 2.0)
-        # Return to hover at 0.50 meters:
-        drone_client.move(0.0, 0.0, 0.50, 0.0, 2.0)
-
-        # Pause after landing
-    drone_client.move(0.0, 0.0, 0.10, 0.0, 2.0)
-    drone_client.stop(1.0)
+    drone_client.move(0., 0., 0.20, 0., 1.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -341,5 +318,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('force_data.json', 'w') as outfile:
+    with open('hardware_data_1.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
