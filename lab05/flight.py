@@ -279,7 +279,7 @@ class QualisysClient(Thread):
 
 if __name__ == '__main__':
     # Specify whether or not to use the motion capture system
-    use_mocap = True
+    use_mocap = False
 
     # Initialize radio
     cflib.crtp.init_drivers()
@@ -303,7 +303,7 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    drone_client.move(0., 0., 0.20, 0., 1.0)
+    drone_client.move(0., 0., 0.20, 0., 2.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -318,5 +318,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('hardware_data_1.json', 'w') as outfile:
+    with open('hardware_data_2.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
