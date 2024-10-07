@@ -303,7 +303,7 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    drone_client.move(0., 0., 0.20, 0., 2.0)
+    drone_client.move(0., 0., 0.20, 0., 1.5)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -318,5 +318,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('hardware_data_2.json', 'w') as outfile:
+    with open('hardware_data_3.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
