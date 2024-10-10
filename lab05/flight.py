@@ -52,6 +52,12 @@ variables = [
     'ae483log.m_2',
     'ae483log.m_3',
     'ae483log.m_4',
+
+    'ae483log.tau_x',
+    'ae483log.tau_y',
+    'ae483log.tau_z',
+    'ae483log.tau_x_cmd',
+    'ae483log.tau_y_cmd'
 ]
 
 # Specify the IP address of the motion capture system
@@ -279,7 +285,7 @@ class QualisysClient(Thread):
 
 if __name__ == '__main__':
     # Specify whether or not to use the motion capture system
-    use_mocap = False
+    use_mocap = True
 
     # Initialize radio
     cflib.crtp.init_drivers()
@@ -303,7 +309,18 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    drone_client.move(0., 0., 0.20, 0., 10)
+    # Graceful takeoff
+    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
+    
+    # Hover for ten seconds
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 10.0)
+
+    # Graceful landing
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -318,5 +335,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('hardware_data_4.json', 'w') as outfile:
+    with open('demo.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
