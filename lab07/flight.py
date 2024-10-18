@@ -39,7 +39,7 @@ uri = 'radio://0/78/2M/E7E7E7E7E7'
 
 # Specify the variables you want to log at 100 Hz from the drone
 variables = [
-    # State
+    # State estimates (still from default observer)
     'ae483log.p_x',
     'ae483log.p_y',
     'ae483log.p_z',
@@ -49,9 +49,14 @@ variables = [
     'ae483log.v_x',
     'ae483log.v_y',
     'ae483log.v_z',
+    # Measurements
     'ae483log.w_x',
     'ae483log.w_y',
     'ae483log.w_z',
+    'ae483log.n_x',
+    'ae483log.n_y',
+    'ae483log.r',
+    'ae483log.a_z',
     # Setpoint
     'ae483log.p_x_des',
     'ae483log.p_y_des',
@@ -61,12 +66,6 @@ variables = [
     'ae483log.m_2',
     'ae483log.m_3',
     'ae483log.m_4',
-
-    'ae483log.tau_x',
-    'ae483log.tau_y',
-    'ae483log.tau_z',
-    'ae483log.tau_x_cmd',
-    'ae483log.tau_y_cmd'
 ]
 
 # Specify the IP address of the motion capture system
@@ -362,32 +361,22 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    # # Graceful takeoff
-    # drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
-    # drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
-    # drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
-    
-    # # Hover for ten seconds
-    # drone_client.move(0.0, 0.0, 0.50, 0.0, 10.0)
-
-    # # Graceful landing
-    # drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
-    # drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
-    # drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
         # Graceful takeoff
-    # Graceful takeoff
     drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
     drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 0.5)
+    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
     
-    # Move in a square
+    # Move in a square (with a pause at each corner)
     drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
+    drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
     drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
+    drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
     drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
+    drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
     drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
 
     # Graceful landing
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 0.5)
+    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
     drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
     drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
     # Disconnect from the drone
@@ -403,5 +392,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab07_square01.json', 'w') as outfile:
+    with open('square_smooth_3.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
