@@ -392,5 +392,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('square_smooth_3.json', 'w') as outfile:
+    with open('lab07_square02.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
