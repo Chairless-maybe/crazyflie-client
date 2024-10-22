@@ -270,3 +270,20 @@ def sync_data_mocap(raw_data_mocap, t, z_drone):
 
     # Return the result
     return transformed_data_mocap
+
+def sync_data_mocap_gradient(raw_data_mocap, t, z_drone, max_iterations=15, learning_rate = 0.01):
+    t_shift = 0.05
+
+    dt_shift = 0.02
+    i = 0
+    optimizing = True
+    last_rmse = float("inf")
+    rmse = 0.
+
+    while optimizing and i < max_iterations:
+        resampled_data_mocap = resample_data_mocap(raw_data_mocap, t, t_shift)
+        rmse = np.sqrt(np.mean(resampled_data_mocap['z'] - z_drone)**2)
+        
+        drmse = np.sqrt(np.mean(resample_data_mocap(raw_data_mocap, t, t_shift + dt_shift)['z'] - z_drone)**2)
+        gradient = drmse / dt_shift
+        # expected_
