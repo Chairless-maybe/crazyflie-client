@@ -39,7 +39,7 @@ uri = 'radio://0/78/2M/E7E7E7E7E7'
 
 # Specify the variables you want to log at 100 Hz from the drone
 variables = [
-    # State estimates (still from default observer)
+    # State estimates (custom observer)
     'ae483log.p_x',
     'ae483log.p_y',
     'ae483log.p_z',
@@ -49,6 +49,16 @@ variables = [
     'ae483log.v_x',
     'ae483log.v_y',
     'ae483log.v_z',
+    # State estimates (default observer)
+    'stateEstimate.x',
+    'stateEstimate.y',
+    'stateEstimate.z',
+    'stateEstimate.yaw',
+    'stateEstimate.pitch',
+    'stateEstimate.roll',
+    'stateEstimate.vx',
+    'stateEstimate.vy',
+    'stateEstimate.vz',
     # Measurements
     'ae483log.w_x',
     'ae483log.w_y',
@@ -57,10 +67,14 @@ variables = [
     'ae483log.n_y',
     'ae483log.r',
     'ae483log.a_z',
-    # Setpoint
+    # Desired position (custom controller)
     'ae483log.p_x_des',
     'ae483log.p_y_des',
     'ae483log.p_z_des',
+    # Desired position (default controller)
+    'ctrltarget.x',
+    'ctrltarget.y',
+    'ctrltarget.z',
     # Motor power commands
     'ae483log.m_1',
     'ae483log.m_2',
@@ -337,7 +351,7 @@ class QualisysClient(Thread):
 
 if __name__ == '__main__':
     # Specify whether or not to use the motion capture system
-    use_mocap = True
+    use_mocap = False
 
     # Initialize radio
     cflib.crtp.init_drivers()
@@ -346,7 +360,7 @@ if __name__ == '__main__':
     drone_client = CrazyflieClient(
         uri,
         use_controller=True,
-        use_observer=False,
+        use_observer=True,
         marker_deck_ids=marker_deck_ids if use_mocap else None,
     )
 
@@ -362,23 +376,7 @@ if __name__ == '__main__':
     drone_client.stop(1.0)
 
         # Graceful takeoff
-    drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
-    drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
-    
-    # Move in a square (with a pause at each corner)
-    drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
-    drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
-    drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
-    drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
-    drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
-    drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
-    drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
-
-    # Graceful landing
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
-    drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.20, 0.0, 2.0)
     # Disconnect from the drone
     drone_client.disconnect()
 
@@ -392,5 +390,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab07_square02.json', 'w') as outfile:
+    with open('lab08_takeoff_02.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
