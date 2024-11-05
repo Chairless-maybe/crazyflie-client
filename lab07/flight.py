@@ -359,8 +359,8 @@ if __name__ == '__main__':
     # Create and start the client that will connect to the drone
     drone_client = CrazyflieClient(
         uri,
-        use_controller=True,
-        use_observer=True,
+        use_controller=False,
+        use_observer=False,
         marker_deck_ids=marker_deck_ids if use_mocap else None,
     )
 
@@ -375,25 +375,17 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-     # Graceful takeoff
-    drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
-    drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+    # Graceful takeoff
+    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
     
-    # Move in a square five times (with a pause at each corner)
-    num_squares = 5
-    for i in range(num_squares):
-        drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
-        drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
-        drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
-        drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
-        drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+    # Hover for ten seconds
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 10.0)
 
     # Graceful landing
-    drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
+    drone_client.move(0.0, 0.0, 0.50, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.35, 0.0, 1.0)
     drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
 
     # Disconnect from the drone
@@ -409,5 +401,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab08_squares.json', 'w') as outfile:
+    with open('lab08_hover_default_default.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
