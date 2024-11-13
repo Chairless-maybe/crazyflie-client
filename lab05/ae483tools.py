@@ -286,4 +286,4 @@ def sync_data_mocap_gradient(raw_data_mocap, t, z_drone, max_iterations=15, lear
         
         drmse = np.sqrt(np.mean(resample_data_mocap(raw_data_mocap, t, t_shift + dt_shift)['z'] - z_drone)**2)
         gradient = drmse / dt_shift
-        # expected_
+        
