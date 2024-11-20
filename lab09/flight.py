@@ -81,13 +81,13 @@ variables = [
     'ae483log.m_2',
     'ae483log.m_3',
     'ae483log.m_4',
-    # Motion capture measurements
+    # Mocap measurements
     'ae483log.p_x_mocap',
     'ae483log.p_y_mocap',
     'ae483log.p_z_mocap',
     'ae483log.psi_mocap',
     'ae483log.theta_mocap',
-    'ae483log.phi_mocap',
+    'ae483log.phi_mocap'
 ]
 
 # Specify the IP address of the motion capture system
@@ -351,7 +351,6 @@ class QualisysClient(Thread):
         self.data['pitch'].append(pitch)
         self.data['roll'].append(roll)
 
-        # Check if the measurements are valid
         if np.isfinite(x):
             # Convert orientation to quaternion
             qx, qy, qz, qw = R.as_quat()
@@ -366,7 +365,6 @@ class QualisysClient(Thread):
     async def _close(self):
         await self.connection.stream_frames_stop()
         self.connection.disconnect()
-
 
 def send_poses(client, queue):
     print('Start sending poses')
@@ -409,18 +407,30 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    current_data = mocap_client.data
-    starting_pose = np.array([current_data["x"][-1], current_data["y"][-1], current_data["z"][-1], current_data["yaw"][-1]])
+    starting_pose = pose_queue.get()
+    p_start = np.array(starting_pose[:3])
+    starting_yaw = starting_pose[3]
+
+    print(p_start)
+    # Graceful takeoff
+    drone_client.move(*(p_start + np.array([0, 0, 0.2])), starting_pose[3], 1.0)
+    drone_client.move_smooth(p_start + np.array([0, 0, 0.2]), p_start + np.array([0., 0., 0.5]), starting_yaw, 0.20)
+    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
     
-    # Takeoff
-    drone_client.move(0. + starting_pose[0], 0. + starting_pose[1], 0.2 + starting_pose[2], 0. + starting_pose[3], 1.0)
-    drone_client.move_smooth(starting_pose[:3] + np.array([0, 0, 0.2]), starting_pose[:3] + np.array([0, 0, 0.5]), 0. + starting_pose[3], 0.1)
-    drone_client.move(0. + starting_pose[0], 0. + starting_pose[1], 0.5 + starting_pose[2], 0. + starting_pose[3], 10.)
-    # Landing
-    drone_client.move_smooth(starting_pose[:3] + np.array([0, 0, 0.5]), starting_pose[:3] + np.array([0, 0, 0.2]), 0. + starting_pose[3], 0.1)
-    
-    # drone_client.move(0. + starting_pose[0], 0. + starting_pose[1], 0.5 + starting_pose[2], 0. + starting_pose[3], 5)
-    
+    # Move in a square five times (with a pause at each corner)
+    # num_squares = 5
+    # drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
+    # drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
+    # drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
+    # drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
+    # drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
+    # drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
+    # drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
+    # drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+
+    # Graceful landing
+    drone_client.move_smooth(p_start + np.array([0, 0, 0.2]), p_start + np.array([0., 0., 0.5]), starting_yaw, 0.20)
+    drone_client.move(*(p_start + np.array([0, 0, 0.2])), starting_yaw, 1.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -435,5 +445,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab09_long_takeoff_custom_2.json', 'w') as outfile:
+    with open('lab09_takeoff_short.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
