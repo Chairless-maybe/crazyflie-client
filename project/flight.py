@@ -367,7 +367,7 @@ if __name__ == '__main__':
     # Create and start the client that will connect to the drone
     drone_client = CrazyflieClient(
         uri,
-        use_controller=False,
+        use_controller=True,
         use_observer=False,
         marker_deck_ids=marker_deck_ids if use_mocap else None,
     )
@@ -387,18 +387,35 @@ if __name__ == '__main__':
     # starting_pose = np.array([current_data["x"][-1], current_data["y"][-1], current_data["z"][-1], current_data["yaw"][-1]])
     
     # Takeoff
-    drone_client.move(0., 0., 0.2, 0., 1.0)
-    drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0., 0.1)
-    drone_client.move(0., 0., 0.5, 0., 2.)
+    initial_data = drone_client.data
+    initial_pos = np.array([initial_data["stateEstimate.x"]["data"][-1],
+                            initial_data["stateEstimate.y"]["data"][-1],
+                            initial_data["stateEstimate.z"]["data"][-1]])
+    initial_yaw = initial_data["stateEstimate.yaw"]["data"][-1]
+
+    print(initial_pos)
+
+    points = np.array([[0., 0., 0.2], [0., 0., 0.5]]) + initial_pos
+
+    drone_client.move(*points[0, :], initial_yaw, 1.0)
+    drone_client.move_smooth(points[0, :], points[1, :], initial_yaw, 0.1)
+    drone_client.move(*points[1, :], initial_yaw, 2.)
+
+    square_points = np.array([[0., 0., 0.5], [0., 0.5, 0.8], [0.5, 0.5, 0.5], [0.5, 0., 0.3]]) + initial_pos
 
     # Move in a 0.5m square
-    drone_client.move_smooth([0., 0., 0.5], [0.5, 0., 0.5], 0., 0.2)
-    drone_client.move_smooth([0.5, 0., 0.5], [0.5, 0.5, 1.], 0., 0.2)
-    drone_client.move_smooth([0.5, 0.5, 1.], [0., 0.5, 1.], 0., 0.2)
-    drone_client.move_smooth([0., 0.5, 1.], [0., 0., 0.5], 0., 0.2)
+    for i in range(2):
+        drone_client.move_smooth(square_points[0, :], square_points[1, :], initial_yaw, 0.2)
+        drone_client.move(*square_points[1], initial_yaw, 1.)
+        drone_client.move_smooth(square_points[1, :], square_points[2, :], initial_yaw, 0.2)
+        drone_client.move(*square_points[2], initial_yaw, 1.)
+        drone_client.move_smooth(square_points[2, :], square_points[3, :], initial_yaw, 0.2)
+        drone_client.move(*square_points[3], initial_yaw, 1.)
+        drone_client.move_smooth(square_points[3, :], square_points[0, :], initial_yaw, 0.2)
+        drone_client.move(*square_points[0], initial_yaw, 1.)
 
     # Landing
-    drone_client.move_smooth([0, 0, 0.5], [0, 0, 0.2], 0., 0.1)
+    drone_client.move_smooth(points[1, :], points[0, :], initial_yaw, 0.1)
     
     # drone_client.move(0. + starting_pose[0], 0. + starting_pose[1], 0.5 + starting_pose[2], 0. + starting_pose[3], 5)
     
@@ -416,5 +433,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('calibration_default_obs.json', 'w') as outfile:
+    with open('calibration_default_obs_varying_height.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
