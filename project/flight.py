@@ -266,7 +266,7 @@ class CrazyflieClient:
 
         self.move_smooth(current_pos, desired_pos, yaw, v)
 
-    def follow_gradient(self, dt, yaw=0, speed=0.25, travel_dist=0.5):
+    def follow_gradient(self, dt, yaw=0, speed=0.25, travel_dist=0.25):
         start_time = time.time()
         
         while time.time() - start_time < dt:
@@ -287,7 +287,10 @@ class CrazyflieClient:
             self.gradient = dr / ds
         
             # Follow gradient
-            self.move_relative(travel_dist * self.gradient)
+            if r_initial > 1.:
+                self.move_relative(-travel_dist * self.gradient)
+            else:
+                self.move_relative(travel_dist * self.gradient)
 
         return
             
