@@ -124,6 +124,7 @@ class CrazyflieClient:
         self.cf.open_link(uri)
         self.is_fully_connected = False
         self.data = {}
+        self.gradient = np.array([0, 0, 0])
 
     def _connected(self, uri):
         print(f'CrazyflieClient: Connected to {uri}')
@@ -258,6 +259,37 @@ class CrazyflieClient:
                 return
             else:
                 time.sleep(0.1)
+
+    def move_relative(self, dP_inW, yaw, v):
+        current_pos = np.array([self.data[u]['data'][-1] for u in ['stateEstimate.x', 'stateEstimate.y', 'stateEstimate.z']])
+        desired_pos = current_pos + dP_inW
+
+        self.move_smooth(current_pos, desired_pos, yaw, v)
+
+    def follow_gradient(self, dt, yaw=0, speed=0.25, travel_dist=0.5):
+        start_time = time.time()
+        
+        while time.time() - start_time < dt:
+            # Calculate gradient
+            ds = 0.05 # step size in each direction for gradient calculation
+            grad_steps = ds * np.eye(3)
+            
+            r_initial = self.data['ae483log.r_s']['data'][-1]
+            
+            dr = np.array([0., 0., 0.])
+
+            for i in range(3):
+                self.move_relative(grad_steps[i], yaw, speed)
+                dr[i] = self.data['ae483log.r_s']['data'][-1] - r_initial
+                self.move_relative(-grad_steps[i], yaw, speed)
+                r_initial = self.data['ae483log.r_s']['data'][-1]
+
+            self.gradient = dr / ds
+        
+            # Follow gradient
+            self.move_relative(travel_dist * self.gradient)
+
+        return
             
     def stop(self, dt):
         print(f'CrazyflieClient: Stop for {dt} seconds')
