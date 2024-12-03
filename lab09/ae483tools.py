@@ -250,7 +250,7 @@ def transform_data_mocap(raw_data):
 
 def sync_data_mocap(raw_data_mocap, t, z_drone,
                     do_transform=True, t_min_offset=0.,
-                    t_shift_bnds=[0., 1.0], t_shift_res=0.05):
+                    t_shift_bnds=[0., .2], t_shift_res=0.01):
     # Find the time shift the minimizes RMSE
     t_shifts = np.linspace(
         t_shift_bnds[0],
@@ -311,6 +311,7 @@ def sync_data_mocap(raw_data_mocap, t, z_drone,
         transformed_data_mocap = resampled_data_mocap
     # Return the result
     return transformed_data_mocap
+
 def check_mocap_coverage(filename):
     # Load data
     raw_data_drone, raw_data_mocap = load_hardware_data(filename)

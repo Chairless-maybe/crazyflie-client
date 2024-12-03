@@ -16,7 +16,6 @@ import xml.etree.cElementTree as ET
 from threading import Thread
 import qtm_rt as qtm
 from scipy.spatial.transform import Rotation
-from multiprocessing import SimpleQueue
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # 
 # 
@@ -81,14 +80,6 @@ variables = [
     'ae483log.m_2',
     'ae483log.m_3',
     'ae483log.m_4',
-    # Motion capture measurements
-    # 'ae483log.p_x_mocap',
-    # 'ae483log.p_y_mocap',
-    # 'ae483log.p_z_mocap',
-    # 'ae483log.psi_mocap',
-    # 'ae483log.theta_mocap',
-    # 'ae483log.phi_mocap',
-    'ae483log.d'
 ]
 
 # Specify the IP address of the motion capture system
@@ -124,7 +115,6 @@ class CrazyflieClient:
         self.cf.open_link(uri)
         self.is_fully_connected = False
         self.data = {}
-        self.gradient = np.array([0, 0, 0])
 
     def _connected(self, uri):
         print(f'CrazyflieClient: Connected to {uri}')
@@ -259,6 +249,17 @@ class CrazyflieClient:
                 return
             else:
                 time.sleep(0.1)
+            
+    def stop(self, dt):
+        print(f'CrazyflieClient: Stop for {dt} seconds')
+        self.cf.commander.send_stop_setpoint()
+        self.cf.commander.send_notify_setpoint_stop()
+        start_time = time.time()
+        while time.time() - start_time < dt:
+            time.sleep(0.1)
+
+    def disconnect(self):
+        self.cf.close_link()
 
     def move_relative(self, dP_inW, yaw, v):
         current_pos = np.array([self.data[u]['data'][-1] for u in ['stateEstimate.x', 'stateEstimate.y', 'stateEstimate.z']])
@@ -274,38 +275,25 @@ class CrazyflieClient:
             ds = 0.05 # step size in each direction for gradient calculation
             grad_steps = ds * np.eye(3)
             
-            r_initial = self.data['ae483log.r_s']['data'][-1]
+            r_initial = self.data['ae483log.d']['data'][-1]
             
             dr = np.array([0., 0., 0.])
 
             for i in range(3):
                 self.move_relative(grad_steps[i], yaw, speed)
-                dr[i] = self.data['ae483log.r_s']['data'][-1] - r_initial
+                dr[i] = self.data['ae483log.d']['data'][-1] - r_initial
                 self.move_relative(-grad_steps[i], yaw, speed)
-                r_initial = self.data['ae483log.r_s']['data'][-1]
+                r_initial = self.data['ae483log.d']['data'][-1]
 
             self.gradient = dr / ds
         
             # Follow gradient
             if r_initial > 1.:
-                self.move_relative(-travel_dist * self.gradient)
+                self.move_relative(-travel_dist * self.gradient, yaw, speed)
             else:
-                self.move_relative(travel_dist * self.gradient)
+                self.move_relative(-travel_dist * self.gradient, yaw, speed)
 
         return
-            
-    def stop(self, dt):
-        print(f'CrazyflieClient: Stop for {dt} seconds')
-        self.cf.commander.send_stop_setpoint()
-        self.cf.commander.send_notify_setpoint_stop()
-        start_time = time.time()
-        while time.time() - start_time < dt:
-            time.sleep(0.1)
-
-    def disconnect(self):
-        self.cf.close_link()
-
-
 ###################################
 # CLIENT FOR QUALISYS
 
@@ -389,6 +377,7 @@ class QualisysClient(Thread):
         await self.connection.stream_frames_stop()
         self.connection.disconnect()
 
+
 ###################################
 # FLIGHT CODE
 
@@ -403,7 +392,7 @@ if __name__ == '__main__':
     drone_client = CrazyflieClient(
         uri,
         use_controller=True,
-        use_observer=False,
+        use_observer=True,
         marker_deck_ids=marker_deck_ids if use_mocap else None,
     )
 
@@ -418,42 +407,26 @@ if __name__ == '__main__':
     # Pause before takeoff
     drone_client.stop(1.0)
 
-    # current_data = mocap_client.data
-    # starting_pose = np.array([current_data["x"][-1], current_data["y"][-1], current_data["z"][-1], current_data["yaw"][-1]])
+    # Graceful takeoff
+    drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
+    drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
+    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
     
-    # Takeoff
-    initial_data = drone_client.data
-    initial_pos = np.array([initial_data["stateEstimate.x"]["data"][-1],
-                            initial_data["stateEstimate.y"]["data"][-1],
-                            initial_data["stateEstimate.z"]["data"][-1]])
-    initial_yaw = initial_data["stateEstimate.yaw"]["data"][-1]
+    # Move in a square five times (with a pause at each corner)
+    # num_squares = 5
+    # for i in range(num_squares):
+    #     drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
-    print(initial_pos)
-
-    points = np.array([[0., 0., 0.2], [0., 0., 0.5]]) + initial_pos
-
-    drone_client.move(*points[0, :], initial_yaw, 1.0)
-    drone_client.move_smooth(points[0, :], points[1, :], initial_yaw, 0.1)
-    drone_client.move(*points[1, :], initial_yaw, 2.)
-
-    square_points = np.array([[0., 0., 0.5], [0., 0.5, 0.8], [0.5, 0.5, 0.5], [0.5, 0., 0.3]]) + initial_pos
-
-    # Move in a 0.5m square
-    for i in range(2):
-        drone_client.move_smooth(square_points[0, :], square_points[1, :], initial_yaw, 0.2)
-        drone_client.move(*square_points[1], initial_yaw, 1.)
-        drone_client.move_smooth(square_points[1, :], square_points[2, :], initial_yaw, 0.2)
-        drone_client.move(*square_points[2], initial_yaw, 1.)
-        drone_client.move_smooth(square_points[2, :], square_points[3, :], initial_yaw, 0.2)
-        drone_client.move(*square_points[3], initial_yaw, 1.)
-        drone_client.move_smooth(square_points[3, :], square_points[0, :], initial_yaw, 0.2)
-        drone_client.move(*square_points[0], initial_yaw, 1.)
-
-    # Landing
-    drone_client.move_smooth(points[1, :], points[0, :], initial_yaw, 0.1)
-    
-    # drone_client.move(0. + starting_pose[0], 0. + starting_pose[1], 0.5 + starting_pose[2], 0. + starting_pose[3], 5)
-    
+    # Graceful landing
+    drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
+    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -468,5 +441,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('calibration_default_obs_varying_height.json', 'w') as outfile:
+    with open('lab08_hover_custom_custom.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)

@@ -351,7 +351,7 @@ class QualisysClient(Thread):
 
 if __name__ == '__main__':
     # Specify whether or not to use the motion capture system
-    use_mocap = True
+    use_mocap = False
 
     # Initialize radio
     cflib.crtp.init_drivers()
@@ -359,7 +359,7 @@ if __name__ == '__main__':
     # Create and start the client that will connect to the drone
     drone_client = CrazyflieClient(
         uri,
-        use_controller=True,
+        use_controller=False,
         use_observer=True,
         marker_deck_ids=marker_deck_ids if use_mocap else None,
     )
@@ -378,19 +378,19 @@ if __name__ == '__main__':
     # Graceful takeoff
     drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
     drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+    drone_client.move(0.0, 0.0, 0.5, 0.0, 5.0)
     
     # Move in a square five times (with a pause at each corner)
-    num_squares = 5
-    for i in range(num_squares):
-        drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
-        drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
-        drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
-        drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
-        drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
-        drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+    # num_squares = 5
+    # for i in range(num_squares):
+    #     drone_client.move_smooth([0.0, 0.0, 0.5], [0.5, 0.0, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.5, 0.0, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.5, 0.0, 0.5], [0.5, 0.5, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.5, 0.5, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.5, 0.5, 0.5], [0.0, 0.5, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.0, 0.5, 0.5, 0.0, 1.0)
+    #     drone_client.move_smooth([0.0, 0.5, 0.5], [0.0, 0.0, 0.5], 0.0, 0.20)
+    #     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
     # Graceful landing
     drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
@@ -409,5 +409,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab08_hover_custom_custom.json', 'w') as outfile:
+    with open('project_test.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)

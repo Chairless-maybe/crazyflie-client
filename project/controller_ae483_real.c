@@ -107,7 +107,7 @@ void ae483UpdateWithDistance(distanceMeasurement_t *meas)
   //  meas->z         float     z position of this anchor
   //  meas->distance  float     the measured distance
 
-  if (meas->anchorId == 3) {
+  if (meas->anchorId == 6) {
     // Get position of node
     // x0 = meas->x;
     // y0 = meas->y;
@@ -231,7 +231,6 @@ void controllerAE483(control_t *control,
     // Update estimates
     p_x += dt * v_x;
     p_y += dt * v_y;
-    p_z += dt * (v_z - 24.182550030836207f * r_err);
     psi += dt * w_z; 
     p_z += dt * (v_z - 24.182550030837003f * r_err);
     theta += dt * (w_y - 0.004879850801338923f * n_x_err - 1.2265369269677656e-13f * r_err);
