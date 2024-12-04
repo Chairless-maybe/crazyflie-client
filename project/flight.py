@@ -280,7 +280,7 @@ class CrazyflieClient:
 
         self.move_smooth(current_pos, desired_pos, yaw, v)
 
-    def follow_gradient(self, dt, yaw=0., speed=0.25, travel_dist=0.25):
+    def follow_gradient(self, dt, yaw=0., speed=0.05, travel_dist=1.):
         start_time = time.time()
         
         while time.time() - start_time < dt:
@@ -292,19 +292,24 @@ class CrazyflieClient:
             
             dr = np.array([0., 0., 0.])
 
-            for i in range(3):
-                self.move_relative(grad_steps[i], yaw, speed)
-                dr[i] = self.data['ae483log.d']['data'][-1] - r_initial
-                self.move_relative(-grad_steps[i], yaw, speed)
-                r_initial = self.data['ae483log.d']['data'][-1]
+            for i in range(2):
+                self.move_relative_smooth(grad_steps[i, :], yaw, speed)
+                self.hover(yaw, 0.5)
+                dr[i] = self.data['ae483log.r_s']['data'][-1] - r_initial
+                self.move_relative_smooth(-grad_steps[i, :], yaw, speed)
+                self.hover(yaw, 0.5)
+                r_initial = self.data['ae483log.r_s']['data'][-1]
 
             self.gradient = dr / ds
+            self.gradient /= np.linalg.norm(self.gradient)
         
             # Follow gradient
+            print("Following gradient")
+            print(f"Gradient = {self.gradient}")
             if r_initial > 1.:
-                self.move_relative(-travel_dist * self.gradient, yaw, speed)
+                self.move_relative_smooth(-travel_dist * self.gradient, yaw, speed)
             else:
-                self.move_relative(travel_dist * self.gradient, yaw, speed)
+                self.move_relative_smooth(travel_dist * self.gradient, yaw, speed)
 
         return
 ###################################
@@ -438,7 +443,7 @@ if __name__ == '__main__':
 
     print(f"Estimated position now: {drone_client.get_pos()}")
 
-    drone_client.follow_gradient(5.)
+    drone_client.follow_gradient(10.)
     
     # Move in a square five times (with a pause at each corner)
     # num_squares = 5
@@ -469,5 +474,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('hover_test.json', 'w') as outfile:
+    with open('follower_test.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
