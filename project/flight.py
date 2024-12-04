@@ -49,6 +49,7 @@ variables = [
     'ae483log.v_x',
     'ae483log.v_y',
     'ae483log.v_z',
+    'ae483log.r_s',
     # State estimates (default observer)
     'stateEstimate.x',
     'stateEstimate.y',
@@ -67,6 +68,7 @@ variables = [
     'ae483log.n_y',
     'ae483log.r',
     'ae483log.a_z',
+    'ae483log.d',
     # Desired position (custom controller)
     'ae483log.p_x_des',
     'ae483log.p_y_des',
@@ -80,6 +82,7 @@ variables = [
     'ae483log.m_2',
     'ae483log.m_3',
     'ae483log.m_4',
+    'ae483par.reset_observer'
 ]
 
 # Specify the IP address of the motion capture system
@@ -261,13 +264,23 @@ class CrazyflieClient:
     def disconnect(self):
         self.cf.close_link()
 
-    def move_relative(self, dP_inW, yaw, v):
-        current_pos = np.array([self.data[u]['data'][-1] for u in ['stateEstimate.x', 'stateEstimate.y', 'stateEstimate.z']])
+    def get_pos(self):
+        return np.array([self.data[u]['data'][-1] for u in ['ae483log.p_x', 'ae483log.p_y', 'ae483log.p_z']])
+
+    def hover(self, yaw, dt):
+        self.move(*self.get_pos(), yaw, dt)
+
+    def move_relative(self, dP_inW, yaw, dt):
+        self.move(*(self.get_pos() + dP_inW), yaw, dt)
+
+    def move_relative_smooth(self, dP_inW, yaw, v):
+        # current_pos = np.array([self.data[u]['data'][-1] for u in ['stateEstimate.x', 'stateEstimate.y', 'stateEstimate.z']])
+        current_pos = self.get_pos()
         desired_pos = current_pos + dP_inW
 
         self.move_smooth(current_pos, desired_pos, yaw, v)
 
-    def follow_gradient(self, dt, yaw=0, speed=0.25, travel_dist=0.25):
+    def follow_gradient(self, dt, yaw=0., speed=0.25, travel_dist=0.25):
         start_time = time.time()
         
         while time.time() - start_time < dt:
@@ -291,7 +304,7 @@ class CrazyflieClient:
             if r_initial > 1.:
                 self.move_relative(-travel_dist * self.gradient, yaw, speed)
             else:
-                self.move_relative(-travel_dist * self.gradient, yaw, speed)
+                self.move_relative(travel_dist * self.gradient, yaw, speed)
 
         return
 ###################################
@@ -404,13 +417,28 @@ if __name__ == '__main__':
     if use_mocap:
         mocap_client = QualisysClient(ip_address, marker_deck_name)
 
+
+    # FIXME: Presence of Loco Positioning Node causes drone to fail to update its state
+
     # Pause before takeoff
     drone_client.stop(1.0)
+    drone_client.cf.param.set_value('ae483par.reset_observer', 1)
+    # drone_client.stop(6.0)
+    # print(f"Starting position: {drone_client.get_pos()}")
 
     # Graceful takeoff
     drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
     drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+
+    # drone_client.move_relative(np.array([0.0, 0.0, 0.2]), 0.0, 1.0)
+    # drone_client.hover(0., 5.)
+    # drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
+    # drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
+
+    print(f"Estimated position now: {drone_client.get_pos()}")
+
+    drone_client.follow_gradient(5.)
     
     # Move in a square five times (with a pause at each corner)
     # num_squares = 5
@@ -425,8 +453,8 @@ if __name__ == '__main__':
     #     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
     # Graceful landing
-    drone_client.move_smooth([0., 0., 0.50], [0., 0., 0.20], 0.0, 0.20)
-    drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
+    # drone_client.move_smooth(drone_client.get_pos(), [0., 0., 0.20], 0.0, 0.20)
+    # drone_client.move(0.0, 0.0, 0.20, 0.0, 1.0)
 
     # Disconnect from the drone
     drone_client.disconnect()
@@ -441,5 +469,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('lab08_hover_custom_custom.json', 'w') as outfile:
+    with open('hover_test.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)

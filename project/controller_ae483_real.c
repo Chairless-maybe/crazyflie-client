@@ -31,6 +31,7 @@ static float p_z_eq = 0.5f;
 static float n_x_err = 0.0f;
 static float n_y_err = 0.0f;
 static float r_err = 0.0f;
+static float d_err = 0.0f;
 
 // Parameters
 static bool use_observer = false;
@@ -48,6 +49,7 @@ static float v_z = 0.0f;
 static float w_x = 0.0f;
 static float w_y = 0.0f;
 static float w_z = 0.0f;
+static float r_s = 0.0f;
 
 static float tau_x_cmd = 0.0f;    // tau_x command
 static float tau_y_cmd = 0.0f;    // tau_y command
@@ -107,7 +109,7 @@ void ae483UpdateWithDistance(distanceMeasurement_t *meas)
   //  meas->z         float     z position of this anchor
   //  meas->distance  float     the measured distance
 
-  if (meas->anchorId == 6) {
+  if (meas->anchorId == 1) {
     // Get position of node
     // x0 = meas->x;
     // y0 = meas->y;
@@ -213,6 +215,7 @@ void controllerAE483(control_t *control,
     v_x = 0.0f;
     v_y = 0.0f;
     v_z = 0.0f;
+    r_s = 0.0f;
     reset_observer = false;
   }
 
@@ -226,18 +229,19 @@ void controllerAE483(control_t *control,
     n_x_err = k_flow * (v_x / p_z_eq - w_y) - n_x;
     n_y_err = k_flow * (v_y / p_z_eq + w_x) - n_y;
     r_err = (p_z-p_z_eq) - (r - p_z_eq);
-
+    d_err = d - r_s;
 
     // Update estimates
     p_x += dt * v_x;
     p_y += dt * v_y;
+    p_z += dt * (v_z - 24.182550030836207f * r_err);
     psi += dt * w_z; 
-    p_z += dt * (v_z - 24.182550030837003f * r_err);
     theta += dt * (w_y - 0.004879850801338923f * n_x_err - 1.2265369269677656e-13f * r_err);
     phi += dt * (w_x + 0.00777056452197445f * n_y_err + 6.929814426225567e-13f * r_err);
     v_x += dt * (g * theta - 0.11917589364948387f * n_x_err - 9.164164124992306e-12f * r_err);
     v_y += dt * (-g * phi - 0.14908193259386854f * n_y_err - 7.364887253554792e-12f * r_err);
     v_z += dt * (a_z - g - 113.84082632339452f * r_err);
+    r_s -= dt * d_err;
     
   } else {
     p_x = state->position.x;
@@ -300,6 +304,7 @@ LOG_ADD(LOG_FLOAT,       v_z,                    &v_z)
 LOG_ADD(LOG_FLOAT,       w_x,                    &w_x)
 LOG_ADD(LOG_FLOAT,       w_y,                    &w_y)
 LOG_ADD(LOG_FLOAT,       w_z,                    &w_z)
+LOG_ADD(LOG_FLOAT,       r_s,                    &r_s)
 LOG_ADD(LOG_FLOAT,       p_x_des,                &p_x_des)
 LOG_ADD(LOG_FLOAT,       p_y_des,                &p_y_des)
 LOG_ADD(LOG_FLOAT,       p_z_des,                &p_z_des)
