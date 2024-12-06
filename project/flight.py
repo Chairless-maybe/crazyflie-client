@@ -49,7 +49,9 @@ variables = [
     'ae483log.v_x',
     'ae483log.v_y',
     'ae483log.v_z',
-    'ae483log.r_s',
+    # 'ae483log.r_s',
+    'ae483log.d_dot',
+    'ae483log.speed_cos',
     # State estimates (default observer)
     'stateEstimate.x',
     'stateEstimate.y',
@@ -78,11 +80,11 @@ variables = [
     'ctrltarget.y',
     'ctrltarget.z',
     # Motor power commands
-    'ae483log.m_1',
-    'ae483log.m_2',
-    'ae483log.m_3',
-    'ae483log.m_4',
-    'ae483par.reset_observer'
+    # 'ae483log.m_1',
+    # 'ae483log.m_2',
+    # 'ae483log.m_3',
+    # 'ae483log.m_4',
+    # 'ae483par.reset_observer'
 ]
 
 # Specify the IP address of the motion capture system
@@ -166,6 +168,7 @@ class CrazyflieClient:
                 self.logconfs.append(LogConfig(name=f'LogConf{len(self.logconfs)}', period_in_ms=10))
             self.data[v] = {'time': [], 'data': []}
             self.logconfs[-1].add_variable(v)
+        self.data['speed_cos'] = {'time': [], 'data': []}
         for logconf in self.logconfs:
             try:
                 self.cf.log.add_config(logconf)
@@ -195,9 +198,21 @@ class CrazyflieClient:
         self.is_fully_connected = False
     
     def _log_data(self, timestamp, data, logconf):
+        # Get magnitude of velocity. By the dot product, we have:
+        # r_s_dot / speed = cos(angle between velocity and P_inT_ofB)
+        # 
+        # Knowing this gives us a circle of all possible target locations. How can we use this?
+        # 
+        # Alternatively, and probably more simply, we can minimize that cosine if we are far away, 
+        # and we can maximize it if we are close to the target.
+
         for v in logconf.variables:
             self.data[v.name]['time'].append(timestamp / 1e3)
             self.data[v.name]['data'].append(data[v.name])
+        
+        # speed_cos = r_s_dot / speed
+        # self.data['speed_cos']['time'].append(timestamp / 1e3)
+        # self.data['speed_cos']['data'].append(self.data['ae483log.d_dot']['data'][-1] / np.sqrt(np.sum([self.data[name]['data'][-1] ** 2 for name in ['ae483log.v_x', 'ae483log.v_y', 'ae483log.v_z']])))
 
     def _log_error(self, logconf, msg):
         print(f'CrazyflieClient: Error when logging {logconf}: {msg}')
@@ -280,36 +295,126 @@ class CrazyflieClient:
 
         self.move_smooth(current_pos, desired_pos, yaw, v)
 
-    def follow_gradient(self, dt, yaw=0., speed=0.05, travel_dist=1.):
+    def follow_gradient(self, dt, yaw=0., speed=1., travel_dist=0.7, learning_rate=0.3, min_d=1., height=0.5):
         start_time = time.time()
+
+        # Set a heading on the XY plane. Assume fixed height for now.
+        target_heading = 0.
+        target_heading_old = 0.
+        speed_cos = 0.
+        speed_cos_old = 0.
+        heading_change_dir = 1. # This is +1 or -1 depending on whether we need to 
+        d_hat = 0.
+        d_hat_old = 0.
+        gradient = 0
+
+        # r_s = 0.
+        v_percent = 0.5
+        d_cos = 0.
+        dr_dx = 0.
+        dr_dy = 0.
         
         while time.time() - start_time < dt:
-            # Calculate gradient
-            ds = 0.05 # step size in each direction for gradient calculation
-            grad_steps = ds * np.eye(3)
-            
-            r_initial = self.data['ae483log.d']['data'][-1]
-            
-            dr = np.array([0., 0., 0.])
+            print(f"Time: {time.time()}")
+            current_v = np.array([self.data[u]['data'][-1] for u in ['ae483log.v_x', 'ae483log.v_y', 'ae483log.v_z']])
 
-            for i in range(2):
-                self.move_relative_smooth(grad_steps[i, :], yaw, speed)
-                self.hover(yaw, 0.5)
-                dr[i] = self.data['ae483log.r_s']['data'][-1] - r_initial
-                self.move_relative_smooth(-grad_steps[i, :], yaw, speed)
-                self.hover(yaw, 0.5)
-                r_initial = self.data['ae483log.r_s']['data'][-1]
+            speed_cos_old = speed_cos
+            speed_cos = self.data['ae483log.speed_cos']['data'][-1]
 
-            self.gradient = dr / ds
-            self.gradient /= np.linalg.norm(self.gradient)
-        
-            # Follow gradient
-            print("Following gradient")
-            print(f"Gradient = {self.gradient}")
-            if r_initial > 1.:
-                self.move_relative_smooth(-travel_dist * self.gradient, yaw, speed)
+            # dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
+            d_hat_old = d_hat
+            d_hat = self.data['ae483log.d']['data'][-1] - min_d
+            if np.abs(d_hat - d_hat_old) > speed * 0.1 * 2: # Sometimes, measurements don't come in, and issues arise.
+                print("Bad measurement. Skipping...")
+                time.sleep(0.01) # Wait for next measurement and restart the loop
+                continue
+
+            print(f"d_hat = {d_hat}")
+            
+            # gradient = 0. if np.isclose(target_heading, target_heading_old) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
+            # speed_cos may be better when doing this in 3D, but 2D heading seems like it should use r_s...or maybe I'm full of shit
+
+            # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (d_hat - d_hat_old) / (target_heading - target_heading_old)
+            gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
+
+            # r_s_data = self.data['ae483log.r_s']
+            # r_s_initial = r_s_data['data'][-1]
+            # r_s_dot = self.data['ae483log.r_s_dot']['data'][-1]
+            # heading_cos = 0
+
+            current_speed = np.linalg.norm(current_v)
+            # Once we're moving fast enough, we want to update our gradient calculation.
+            # if current_speed >= 0.1:
+                # If we don't know wtf is going on, add some arbitrary number to heading so we can calculate gradient next.
+            
+
+            target_heading_old = target_heading
+            if gradient == 0:
+                print("Gradient is zero")
+                # if data['drone']['speed_cos'] > 0:
+                target_heading += 0.1
             else:
-                self.move_relative_smooth(travel_dist * self.gradient, yaw, speed)
+                print(f"Gradient is {gradient}")
+                d_heading = -gradient * learning_rate
+                if np.abs(d_heading) > 1.:
+                    d_heading /= np.abs(d_heading)
+                target_heading += d_heading
+            print(f"Heading = {target_heading}")
+            
+            # 
+            dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
+            current_pos = self.get_pos()
+            for i in range(5):
+                p_inW_des = (i + 1) / 5 * (speed * dir_des * learning_rate * np.min([d_hat, 1])) + current_pos
+                self.cf.commander.send_position_setpoint(*p_inW_des[:2], height, yaw)
+                time.sleep(0.1)
+            
+                # dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
+                # p_inW_des = 0.1 * speed * dir_des * learning_rate * np.min([r_s_hat, 1]) + self.get_pos()
+
+
+                # We want to minimize heading_cos...
+            # If we are not moving fast enough, we need to get moving in order to know how to adjust our heading.
+            # So, start moving in target heading direction.
+            # else:
+            
+
+            # speed_cos_old = speed_cos
+
+            # Move in direction of heading
+
+            # Find change in r_s
+
+            # Using change in r_s, adjust heading
+            # Use two-step backward differentiation to 
+            
+
+            # Calculate gradient
+            # ds = 0.05 # step size in each direction for gradient calculation
+            # grad_steps = ds * np.eye(3)
+            
+            # r_initial = self.data['ae483log.d']['data'][-1]
+            
+            # dr = np.array([0., 0., 0.])
+
+            # for i in range(2):
+            #     self.move_relative_smooth(grad_steps[i, :], yaw, speed)
+            #     self.hover(yaw, 0.5)
+            #     dr[i] = self.data['ae483log.r_s']['data'][-1] - r_initial
+            #     self.move_relative_smooth(-grad_steps[i, :], yaw, speed)
+            #     self.hover(yaw, 0.5)
+            #     r_initial = self.data['ae483log.r_s']['data'][-1]
+
+            # self.gradient = dr / ds
+            # self.gradient /= np.linalg.norm(self.gradient)
+        
+            # # Follow gradient
+            # print("Following gradient")
+            # print(f"Gradient = {self.gradient}")
+            # if r_initial > 1.:
+            #     self.move_relative_smooth(-travel_dist * self.gradient, yaw, speed)
+            # else:
+            #     self.move_relative_smooth(travel_dist * self.gradient, yaw, speed)
 
         return
 ###################################
@@ -423,10 +528,8 @@ if __name__ == '__main__':
         mocap_client = QualisysClient(ip_address, marker_deck_name)
 
 
-    # FIXME: Presence of Loco Positioning Node causes drone to fail to update its state
-
     # Pause before takeoff
-    drone_client.stop(1.0)
+    drone_client.stop(4.0)
     drone_client.cf.param.set_value('ae483par.reset_observer', 1)
     # drone_client.stop(6.0)
     # print(f"Starting position: {drone_client.get_pos()}")
@@ -436,14 +539,14 @@ if __name__ == '__main__':
     drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
-    # drone_client.move_relative(np.array([0.0, 0.0, 0.2]), 0.0, 1.0)
+    drone_client.move_relative(np.array([-0.5, 0.0, 0.2]), 0.0, 1.0)
     # drone_client.hover(0., 5.)
     # drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
     # drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
     print(f"Estimated position now: {drone_client.get_pos()}")
 
-    drone_client.follow_gradient(10.)
+    # drone_client.follow_gradient(30.)
     
     # Move in a square five times (with a pause at each corner)
     # num_squares = 5
