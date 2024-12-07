@@ -312,6 +312,8 @@ class CrazyflieClient:
         vd_hat_old = 0.
         t_old = 0.
         gradient = 0.
+        P_inW_eventual = self.get_pos()
+        P_inW_eventual[2] = height
         
         while time.time() - start_time < dt:
             print(f"Time: {time.time()}")
@@ -336,11 +338,12 @@ class CrazyflieClient:
                 continue
 
             print(f"d_hat = {d_hat}")
+
+            self.move(*P_inW_eventual, yaw, 0.75)
             
             # gradient = 0. if np.isclose(target_heading, target_heading_old) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
             # speed_cos may be better when doing this in 3D, but 2D heading seems like it should use r_s...or maybe I'm full of shit
 
-            dd = d_hat - d_hat_old
             # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else dd / (target_heading - target_heading_old)
             gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (vd_hat - vd_hat_old) / (target_heading - target_heading_old)
 
@@ -401,8 +404,6 @@ class CrazyflieClient:
                     break
                 else:
                     time.sleep(0.1)
-            
-            self.move(*P_inW_eventual, yaw, 0.75)
             
                 # dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
                 # p_inW_des = 0.1 * speed * dir_des * learning_rate * np.min([r_s_hat, 1]) + self.get_pos()
