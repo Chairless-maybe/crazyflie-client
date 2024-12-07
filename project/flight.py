@@ -295,36 +295,42 @@ class CrazyflieClient:
 
         self.move_smooth(current_pos, desired_pos, yaw, v)
 
-    def follow_gradient(self, dt, yaw=0., speed=1., travel_dist=0.7, learning_rate=0.3, min_d=1., height=0.5):
+    def follow_gradient(self, dt, yaw=0., speed=0.5, travel_dist=0.5, learning_rate=0.3, min_d=1., height=0.5):
         start_time = time.time()
 
         # Set a heading on the XY plane. Assume fixed height for now.
         target_heading = 0.
         target_heading_old = 0.
-        speed_cos = 0.
-        speed_cos_old = 0.
+        maneuver_time = travel_dist / speed
+        
+
         heading_change_dir = 1. # This is +1 or -1 depending on whether we need to 
         d_hat = 0.
+        vd_hat = 0.
+        t = 0.
         d_hat_old = 0.
-        gradient = 0
-
-        # r_s = 0.
-        v_percent = 0.5
-        d_cos = 0.
-        dr_dx = 0.
-        dr_dy = 0.
+        vd_hat_old = 0.
+        t_old = 0.
+        gradient = 0.
         
         while time.time() - start_time < dt:
             print(f"Time: {time.time()}")
             current_v = np.array([self.data[u]['data'][-1] for u in ['ae483log.v_x', 'ae483log.v_y', 'ae483log.v_z']])
 
-            speed_cos_old = speed_cos
-            speed_cos = self.data['ae483log.speed_cos']['data'][-1]
-
             # dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
             d_hat_old = d_hat
+            t_old = t
+            
             d_hat = self.data['ae483log.d']['data'][-1] - min_d
-            if np.abs(d_hat - d_hat_old) > speed * 0.1 * 2: # Sometimes, measurements don't come in, and issues arise.
+            t = self.data['ae483log.d']['time'][-1] - start_time
+
+            vd_hat_old = vd_hat
+            if t != t_old:
+                vd_hat = (d_hat - d_hat_old) / (t - t_old)
+            else:
+                vd_hat = 0
+
+            if np.abs(d_hat - d_hat_old) > speed * 0.1 * 2 or d_hat_old == d_hat: # Sometimes, measurements don't come in, and issues arise.
                 print("Bad measurement. Skipping...")
                 time.sleep(0.01) # Wait for next measurement and restart the loop
                 continue
@@ -334,40 +340,69 @@ class CrazyflieClient:
             # gradient = 0. if np.isclose(target_heading, target_heading_old) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
             # speed_cos may be better when doing this in 3D, but 2D heading seems like it should use r_s...or maybe I'm full of shit
 
-            # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (d_hat - d_hat_old) / (target_heading - target_heading_old)
-            gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
+            dd = d_hat - d_hat_old
+            # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else dd / (target_heading - target_heading_old)
+            gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (vd_hat - vd_hat_old) / (target_heading - target_heading_old)
 
-            # r_s_data = self.data['ae483log.r_s']
-            # r_s_initial = r_s_data['data'][-1]
-            # r_s_dot = self.data['ae483log.r_s_dot']['data'][-1]
-            # heading_cos = 0
+            # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
 
-            current_speed = np.linalg.norm(current_v)
-            # Once we're moving fast enough, we want to update our gradient calculation.
-            # if current_speed >= 0.1:
-                # If we don't know wtf is going on, add some arbitrary number to heading so we can calculate gradient next.
-            
+
+            # If gradient is zero
+            #     We are at a maximum or minimum distance.
+            #     Our heading is constant.
+            #     We may be going the right way.
+
+            # If gradient is not zero
+            #     We have changed our direction recently (duh)
+            #     We want to change heading by learning_rate * gradient
+
 
             target_heading_old = target_heading
             if gradient == 0:
                 print("Gradient is zero")
+                # if dd > 0:
+                #     target_heading = -target_heading
                 # if data['drone']['speed_cos'] > 0:
                 target_heading += 0.1
             else:
                 print(f"Gradient is {gradient}")
-                d_heading = -gradient * learning_rate
-                if np.abs(d_heading) > 1.:
-                    d_heading /= np.abs(d_heading)
+                d_heading = np.clip(-gradient * learning_rate, a_min=-1., a_max=1.)
+                # if np.abs(d_heading) > 1.:
+                #     d_heading /= np.abs(d_heading)
                 target_heading += d_heading
             print(f"Heading = {target_heading}")
             
             # 
             dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
             current_pos = self.get_pos()
-            for i in range(5):
-                p_inW_des = (i + 1) / 5 * (speed * dir_des * learning_rate * np.min([d_hat, 1])) + current_pos
+
+            P_inW_eventual = current_pos + travel_dist * target_heading
+            P_inW_eventual[2] = height
+
+            move_start = time.time()
+            while True:
+                current_t = time.time()
+                
+                s = 0
+
+                if move_start <= current_t and current_t <= move_start + maneuver_time:
+                    s=(current_t-move_start)/maneuver_time
+                elif current_t >= move_start + maneuver_time:
+                    s=1
+                
+                # Compute where the drone should be at the current time, in the
+                # coordinates of the world frame
+                p_inW_des = (1-s) * current_pos+s * P_inW_eventual
+                
+                # p_inW_des = (i + 1) / 5 * (speed * 0.1 * dir_des * np.min([d_hat, 1])) + current_pos
                 self.cf.commander.send_position_setpoint(*p_inW_des[:2], height, yaw)
-                time.sleep(0.1)
+
+                if s >= 1:
+                    break
+                else:
+                    time.sleep(0.1)
+            
+            self.move(*P_inW_eventual, yaw, 0.75)
             
                 # dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
                 # p_inW_des = 0.1 * speed * dir_des * learning_rate * np.min([r_s_hat, 1]) + self.get_pos()
@@ -421,6 +456,7 @@ class CrazyflieClient:
 # CLIENT FOR QUALISYS
 
 class QualisysClient(Thread):
+
     def __init__(self, ip_address, marker_deck_name):
         Thread.__init__(self)
         self.ip_address = ip_address
@@ -529,7 +565,7 @@ if __name__ == '__main__':
 
 
     # Pause before takeoff
-    drone_client.stop(4.0)
+    drone_client.stop(1.0)
     drone_client.cf.param.set_value('ae483par.reset_observer', 1)
     # drone_client.stop(6.0)
     # print(f"Starting position: {drone_client.get_pos()}")
@@ -539,14 +575,14 @@ if __name__ == '__main__':
     drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
     drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
-    drone_client.move_relative(np.array([-0.5, 0.0, 0.2]), 0.0, 1.0)
+    # drone_client.move_relative(np.array([-0.5, 0.0, 0.2]), 0.0, 1.0)
     # drone_client.hover(0., 5.)
     # drone_client.move_smooth([0., 0., 0.2], [0., 0., 0.5], 0.0, 0.20)
     # drone_client.move(0.0, 0.0, 0.5, 0.0, 1.0)
 
     print(f"Estimated position now: {drone_client.get_pos()}")
 
-    # drone_client.follow_gradient(30.)
+    drone_client.follow_gradient(30., learning_rate=1., speed=0.5, min_d=0.5)
     
     # Move in a square five times (with a pause at each corner)
     # num_squares = 5
