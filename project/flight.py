@@ -49,9 +49,9 @@ variables = [
     'ae483log.v_x',
     'ae483log.v_y',
     'ae483log.v_z',
-    # 'ae483log.r_s',
+    'ae483log.r_s',
     'ae483log.d_dot',
-    'ae483log.speed_cos',
+    # 'ae483log.speed_cos',
     # State estimates (default observer)
     'stateEstimate.x',
     'stateEstimate.y',
@@ -168,7 +168,6 @@ class CrazyflieClient:
                 self.logconfs.append(LogConfig(name=f'LogConf{len(self.logconfs)}', period_in_ms=10))
             self.data[v] = {'time': [], 'data': []}
             self.logconfs[-1].add_variable(v)
-        self.data['speed_cos'] = {'time': [], 'data': []}
         for logconf in self.logconfs:
             try:
                 self.cf.log.add_config(logconf)
@@ -323,7 +322,11 @@ class CrazyflieClient:
             d_hat_old = d_hat
             t_old = t
             
+            # d_hat = self.data['ae483log.d']['data'][-1] - min_d
+            # t = self.data['ae483log.d']['time'][-1] - start_time
+
             d_hat = self.data['ae483log.d']['data'][-1] - min_d
+            # print(d_hat)
             t = self.data['ae483log.d']['time'][-1] - start_time
 
             vd_hat_old = vd_hat
@@ -345,6 +348,7 @@ class CrazyflieClient:
             # speed_cos may be better when doing this in 3D, but 2D heading seems like it should use r_s...or maybe I'm full of shit
 
             # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else dd / (target_heading - target_heading_old)
+            # print(f"vd_hat = {vd_hat}, vd_hat_old = {vd_hat_old}")
             gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (vd_hat - vd_hat_old) / (target_heading - target_heading_old)
 
             # gradient = 0. if np.isclose(target_heading, target_heading_old, atol=0.01) else (speed_cos - speed_cos_old) / (target_heading - target_heading_old)
@@ -362,24 +366,28 @@ class CrazyflieClient:
 
             target_heading_old = target_heading
             if gradient == 0:
-                print("Gradient is zero")
+                # print("Gradient is zero")
                 # if dd > 0:
                 #     target_heading = -target_heading
                 # if data['drone']['speed_cos'] > 0:
                 target_heading += 0.1
             else:
                 print(f"Gradient is {gradient}")
-                d_heading = np.clip(-gradient * learning_rate, a_min=-1., a_max=1.)
+                clip = 1
+                if d_hat > 1.5 and target_heading - target_heading_old <= 2.:
+                    clip = 4
+                d_heading = np.clip(-gradient * learning_rate, a_min=-clip, a_max=clip)
                 # if np.abs(d_heading) > 1.:
                 #     d_heading /= np.abs(d_heading)
                 target_heading += d_heading
             print(f"Heading = {target_heading}")
+            # print(f"d_hat = {d_hat}")
             
             # 
             dir_des = np.array([np.cos(target_heading), np.sin(target_heading), 0])
             current_pos = self.get_pos()
 
-            P_inW_eventual = current_pos + travel_dist * target_heading
+            P_inW_eventual = current_pos + np.min([d_hat, 1.]) * travel_dist * dir_des
             P_inW_eventual[2] = height
 
             move_start = time.time()
@@ -566,10 +574,10 @@ if __name__ == '__main__':
 
 
     # Pause before takeoff
-    drone_client.stop(1.0)
+    drone_client.stop(2.0)
     drone_client.cf.param.set_value('ae483par.reset_observer', 1)
-    # drone_client.stop(6.0)
-    # print(f"Starting position: {drone_client.get_pos()}")
+    drone_client.stop(1.0)
+    print(f"Starting position: {drone_client.get_pos()}")
 
     # Graceful takeoff
     drone_client.move(0.0, 0.0, 0.2, 0.0, 1.0)
@@ -583,7 +591,7 @@ if __name__ == '__main__':
 
     print(f"Estimated position now: {drone_client.get_pos()}")
 
-    drone_client.follow_gradient(30., learning_rate=1., speed=0.5, min_d=0.5)
+    drone_client.follow_gradient(35., learning_rate=1., speed=0.4, min_d=0.5, travel_dist=0.4)
     
     # Move in a square five times (with a pause at each corner)
     # num_squares = 5
@@ -614,5 +622,5 @@ if __name__ == '__main__':
     data['mocap'] = mocap_client.data if use_mocap else {}
 
     # Write flight data to a file
-    with open('follower_test.json', 'w') as outfile:
+    with open('follower_test_moving3.json', 'w') as outfile:
         json.dump(data, outfile, sort_keys=False)
